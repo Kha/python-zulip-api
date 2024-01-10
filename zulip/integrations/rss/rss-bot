@@ -86,6 +86,13 @@ parser.add_argument(
     help="Convert $ to $$ (for KaTeX processing)",
     default=False,
 )
+parser.add_argument(
+    "--pr-links",
+    dest="pr_links",
+    action="store_true",
+    help="Prefix PR/issue links like '#123' with the repository name in the message body",
+    default=False,
+)
 
 opts = parser.parse_args()  # type: Any
 
@@ -176,21 +183,25 @@ def send_zulip(entry: Any, feed_name: str) -> Dict[str, Any]:
     if m:
         repo = m.group(1)  # type: str
         lines = body.splitlines()
-        if lines:
-            m = re.match(r"^(.*?) \((#\d+)\)(.*)$", lines[0])
+        main_body = "\n".join(lines[1:])
+        if opts.pr_links:
+            main_body = re.sub(r'(?<!\w)(#[0-9]+)\b', lambda m: repo + m.group(0), main_body)
+        m = re.match(r"^(.*?) \((#\d+)\)(.*)$", lines[0]) if lines else None
         if m:
-            body = "**[{}]({})** ({}{}){}\n".format(
+            body = "**[{}]({})** ({}{}){}\n{}".format(
                 m.group(1),
                 entry.link,
                 repo,
                 m.group(2),
-                m.group(3)
-            ) + "\n".join(lines[1:])
+                m.group(3),
+                main_body
+            )
         elif lines:
-            body = "**[{}]({})**\n".format(
+            body = "**[{}]({})**\n{}".format(
                 lines[0],
-                entry.link
-            ) + "\n".join(lines[1:])
+                entry.link,
+                main_body
+            )
 
         author_detail = entry.author  # type: str
         if 'author_detail' in entry and 'href' in entry.author_detail:
